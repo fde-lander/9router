@@ -4,6 +4,13 @@ import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { AI_MODELS } from "@/shared/constants/config";
 import { getProviderAlias } from "@/shared/constants/providers";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { matchOverride, validateEntry } from "open-sse/providers/modelOverrideMatch.js";
+import { getModelOverrideEntries } from "open-sse/providers/modelOverrides.js";
+
+// The override reader lives on the server only (src/instrumentation.js installs
+// it), so this route must never be cached — a cached response would keep
+// serving caps computed before the operator's last YAML edit.
+export const dynamic = "force-dynamic";
 
 // GET /api/models - Get models with aliases
 export async function GET() {
@@ -46,6 +53,11 @@ export async function GET() {
     for (const m of customModels) {
       const fullModel = `${m.providerAlias}/${m.id}`;
       const c = getCapabilitiesForModel(m.providerAlias, m.id);
+      // The stored custom caps (vision/reasoning toggles) sit above the name
+      // heuristic, but the operator's YAML override is the highest priority
+      // source — so re-apply it last, or a stored toggle would silently beat an
+      // explicit override for the same model.
+      const override = matchOverride(getModelOverrideEntries(), m.providerAlias, m.id) || {};
       models.push({
         provider: m.providerAlias,
         model: m.id,
@@ -60,11 +72,12 @@ export async function GET() {
           contextWindow: c.contextWindow,
           maxOutput: c.maxOutput,
           ...(m.caps || {}),
+          ...override,
         },
       });
     }
 
-    return NextResponse.json({ models });
+    return NextResponse.json({ models, overrides: getModelOverrideEntries() });
   } catch (error) {
     console.log("Error fetching models:", error);
     return NextResponse.json({ error: "Failed to fetch models" }, { status: 500 });
