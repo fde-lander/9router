@@ -192,6 +192,9 @@ export default function ModelOverridesPage() {
         return;
       }
       success(`Saved ${data.count} override${data.count === 1 ? "" : "s"}.`, "Model Overrides");
+      // The Combos page caches the caps map built from /api/models. Without this
+      // the old ctx/max survive until a full page reload (reported by MASTER).
+      window.dispatchEvent(new CustomEvent("modelOverridesChanged"));
       await load();
     } catch (e) {
       error(String(e?.message || e), "Model Overrides");
@@ -226,6 +229,7 @@ export default function ModelOverridesPage() {
         return;
       }
       success("File replaced with an empty list.", "Model Overrides");
+      window.dispatchEvent(new CustomEvent("modelOverridesChanged"));
       await load();
     } catch (e) {
       error(String(e?.message || e), "Model Overrides");

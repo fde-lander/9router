@@ -2,10 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { matchOverride } from "open-sse/providers/modelOverrideMatch.js";
 
 // Module cache: one /api/models fetch shared by every useModelCaps instance.
 let cache = null; // { byFull, byId } | null
 let inflight = null;
+// Override entries parsed server-side, shipped with /api/models. The browser has
+// no file to read, so these are what make an override visible for a model that
+// is missing from the maps below.
+let overrides = [];
 
 function buildMaps(models) {
   const byFull = {};
@@ -27,6 +32,7 @@ function loadModelCaps() {
       if (!res.ok) throw new Error(`models ${res.status}`);
       const data = await res.json();
       cache = buildMaps(data.models);
+      overrides = Array.isArray(data.overrides) ? data.overrides : [];
       return cache;
     })
     .catch(() => {
@@ -45,13 +51,25 @@ function resolveCaps(byFull, byId, key) {
   if (byId[bare]) return byId[bare];
   const provider = key.includes("/") ? key.slice(0, key.indexOf("/")) : null;
   const c = getCapabilitiesForModel(provider, bare);
-  return {
+  const base = {
     vision: c.vision,
     search: c.search,
     reasoning: c.reasoning,
     contextWindow: c.contextWindow,
     maxOutput: c.maxOutput,
   };
+  // The client copy of capabilities.js has no override reader (the server
+  // installs it at startup and instrumentation never runs in the browser), so
+  // apply the entries shipped by /api/models here. Without this, a model absent
+  // from the maps above — e.g. one whose id the registry spells differently —
+  // silently fell back to the built-in tables and the override never showed.
+  const override = matchOverride(overrides, provider, bare);
+  if (!override) return base;
+  const merged = { ...base };
+  for (const k of ["contextWindow", "maxOutput", "vision", "search", "reasoning"]) {
+    if (override[k] !== undefined) merged[k] = override[k];
+  }
+  return merged;
 }
 
 export function useModelCaps() {
@@ -68,15 +86,19 @@ export function useModelCaps() {
     } else {
       loadModelCaps().then(sync);
     }
-    // Custom models change at runtime — drop the shared cache and refetch
+    // Custom models change at runtime — drop the shared cache and refetch.
+    // Model overrides change it too: the overrides page saves to YAML, so the
+    // caps computed by /api/models are stale until this map is rebuilt.
     const invalidate = () => {
       cache = null;
       loadModelCaps().then(sync);
     };
     window.addEventListener("customModelChanged", invalidate);
+    window.addEventListener("modelOverridesChanged", invalidate);
     return () => {
       alive = false;
       window.removeEventListener("customModelChanged", invalidate);
+      window.removeEventListener("modelOverridesChanged", invalidate);
     };
   }, []);
 
