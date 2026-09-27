@@ -556,6 +556,57 @@ function getCatalogSource() {
   return globalThis.__9rCatalogSource || null;
 }
 
+// User-editable YAML overrides, installed by the server at startup (see
+// modelOverrides.js). Same globalThis slot pattern as catalogSource, and for the
+// same reason: Next.js standalone emits several copies of this module, so a
+// module-local variable would be written in the copy the startup hook imported
+// and never seen by the copy resolving requests.
+let modelOverrideSource = null;
+
+/**
+ * Install the model-override reader (server only).
+ * @param {{ getOverride: (provider: string, model: string) => object|null } | null} source
+ */
+export function setModelOverrideSource(source) {
+  modelOverrideSource = source;
+  if (typeof globalThis !== "undefined") globalThis.__9rModelOverrideSource = source;
+}
+
+function getModelOverrideSource() {
+  if (typeof globalThis === "undefined") return modelOverrideSource;
+  return globalThis.__9rModelOverrideSource || null;
+}
+
+// Non-modality booleans an override may force. MODALITY_KEYS covers the four
+// input modalities; these are the remaining capability switches.
+const OVERRIDE_BOOL_KEYS = [
+  "imageOutput", "audioOutput", "search", "tools", "reasoning",
+];
+
+// Overrides win over every table (provider-specific, exact, pattern, floor).
+// Applied AFTER resolution so the operator's YAML is authoritative — the
+// hand-written tables short-circuit inside resolveCapabilitiesBase, but they do
+// not bypass this wrapper. Note this is the ONLY way to turn a capability OFF:
+// the synced catalog and vision heuristic can only ever turn one on.
+function applyModelOverride(base, provider, model) {
+  const source = getModelOverrideSource();
+  if (!source) return base;
+  const override = source.getOverride(provider, model);
+  if (!override) return base;
+
+  const result = { ...base };
+  for (const key of ["contextWindow", "maxOutput"]) {
+    if (override[key] !== undefined) result[key] = override[key];
+  }
+  for (const key of MODALITY_KEYS) {
+    if (override[key] !== undefined) result[key] = override[key];
+  }
+  for (const key of OVERRIDE_BOOL_KEYS) {
+    if (override[key] !== undefined) result[key] = override[key];
+  }
+  return result;
+}
+
 // Apply the synced catalog + name heuristic on top of a table-resolved result.
 // Strictly additive: a capability already true stays true, and a false one only
 // flips when an outside source positively declares support.
@@ -620,7 +671,7 @@ function isCommandCodeTextOnly(model) {
   }
   return false;
 }
-export function getCapabilitiesForModel(provider, model) {
+function resolveCapabilitiesBase(provider, model) {
   if (!model) return { ...DEFAULT_CAPABILITIES };
 
   // Canonical exact lookup strips vendor prefix: "anthropic/claude-opus-4.7" -> "claude-opus-4.7".
@@ -664,4 +715,20 @@ export function getCapabilitiesForModel(provider, model) {
 
   // 4. Floor
   return refine(null, provider, model);
+}
+
+/**
+ * Resolve capabilities for a model, then let the operator's YAML override win.
+ *
+ * The wrapper exists because resolveCapabilitiesBase short-circuits on the
+ * hand-written tables (steps 1-2 return before refine() is consulted), so an
+ * injection point inside refine() would silently miss every exactly-catalogued
+ * model. Wrapping the whole resolver is the only way to cover all four layers.
+ *
+ * @param {string} provider
+ * @param {string} model
+ * @returns {object} full capabilities object
+ */
+export function getCapabilitiesForModel(provider, model) {
+  return applyModelOverride(resolveCapabilitiesBase(provider, model), provider, model);
 }
