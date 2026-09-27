@@ -38,6 +38,7 @@ const debugItems = [
 const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
+  { href: "/dashboard/overrides", label: "Model Overrides", icon: "tune" },
 ];
 
 export default function Sidebar({ onClose }) {
