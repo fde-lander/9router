@@ -602,3 +602,32 @@ button:disabled,
   border-top: 1px solid var(--color-border);
   margin: 1.5rem 0;
 }
+
+/* ============================================================
+   FDE CUSTOM: Hide upstream promos + NEW badges
+   ------------------------------------------------------------
+   Pure-CSS hiding so Sidebar.js stays untouched — zero upstream
+   merge conflicts on future upgrades. To restore everything,
+   delete this block.
+
+   Selectors verified unique against Sidebar.js:
+     - 9English link : only element with this href
+     - 9Remote button: only <button> in <aside> with a direct
+                       span.ml-auto child (the NEW badge)
+     - NEW badges    : only 3 spans carrying bg-green-500/15
+   ============================================================ */
+
+/* 9English external link */
+aside a[href="https://9english.net/"] {
+  display: none !important;
+}
+
+/* 9Remote promo button */
+aside button:has(> span.ml-auto) {
+  display: none !important;
+}
+
+/* NEW badges (Media Providers parent, Media Providers child, 9Remote) */
+aside span[class*="bg-green-500/15"] {
+  display: none !important;
+}
