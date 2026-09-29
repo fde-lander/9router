@@ -43,6 +43,25 @@
 
 ---
 
+## 🧩 FDE Fork
+
+This repository is FDE's maintained fork of 9Router. We build on top of upstream: each release is rebased onto the latest upstream version and carries a small set of our own refinements.
+
+**What FDE adds:**
+
+- **Cooldown-aware rate-limit handling** — cooldown responses are normalized to HTTP 429 with a `Retry-After` header, so clients wait the exact amount of time instead of retrying blindly.
+- **User-editable model capability overrides** — a YAML file plus a dedicated dashboard page lets you set context window and max output limits for any model, including local and unlisted ones.
+- **A more focused interface** — a simplified dashboard layout and a refined update display.
+
+**FDE version history** (newest first):
+
+- **2026-09-29** — `fde-v0.5.91.2` — Latest. Added model capability overrides (YAML + dashboard page), a more focused interface, and improved handling for unlisted models.
+- **2026-09-27** — `fde-v0.5.91.1` — Based on upstream v0.5.91, carrying all FDE refinements forward.
+- **2026-09-11** — `fde-v0.5.75.1` — Based on upstream v0.5.75. Introduced FDE versioning and a refined update display.
+- **2026-09-06** — `fde-v0.5.69.1` — First FDE release, based on upstream v0.5.69. Added cooldown-aware 429 + Retry-After handling.
+
+---
+
 ## 🔄 How It Works
 
 ```
