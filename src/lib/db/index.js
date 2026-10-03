@@ -1,4 +1,5 @@
 // Public API barrel — all DB functions
+import fs from "node:fs";
 import { getAdapter } from "./driver.js";
 import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
 
@@ -90,6 +91,20 @@ export async function exportDb() {
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'mitmAlias'`)) out.mitmAlias[r.key] = parseJson(r.value);
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'pricing'`)) out.pricing[r.key] = parseJson(r.value);
 
+  // FDE: include model-overrides.yaml content so Download Backup is complete.
+  // The YAML is a standalone file in DATA_DIR (not in the DB). Reading it here
+  // ensures backups capture FDE's custom CTX/MAX override settings.
+  try {
+    const { OVERRIDES_FILE } = await import("open-sse/providers/modelOverrides.js");
+    if (fs.existsSync(OVERRIDES_FILE)) {
+      out.modelOverridesYaml = fs.readFileSync(OVERRIDES_FILE, "utf8");
+    } else {
+      out.modelOverridesYaml = null;
+    }
+  } catch {
+    out.modelOverridesYaml = null;
+  }
+
   return out;
 }
 
@@ -161,6 +176,24 @@ export async function importDb(payload) {
       db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('pricing', ?, ?)`, [provider, stringifyJson(models || {})]);
     }
   });
+
+  // FDE: restore model-overrides.yaml from backup payload.
+  // Only writes when the payload actually contains YAML content (new backups).
+  // Old backups without this field → leave the current YAML untouched (safe default).
+  // Fail-open: a write error does NOT undo the successful DB import above.
+  if (typeof payload.modelOverridesYaml === "string" && payload.modelOverridesYaml.length > 0) {
+    try {
+      const { OVERRIDES_FILE } = await import("open-sse/providers/modelOverrides.js");
+      if (fs.existsSync(OVERRIDES_FILE)) {
+        fs.copyFileSync(OVERRIDES_FILE, `${OVERRIDES_FILE}.bak`);
+      }
+      const tmp = `${OVERRIDES_FILE}.tmp`;
+      fs.writeFileSync(tmp, payload.modelOverridesYaml, "utf8");
+      fs.renameSync(tmp, OVERRIDES_FILE);
+    } catch (err) {
+      console.warn("[FDE][importDb] Failed to restore model-overrides.yaml:", err?.message || err);
+    }
+  }
 
   return await exportDb();
 }
