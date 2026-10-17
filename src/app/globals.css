@@ -612,9 +612,13 @@ button:disabled,
 
    Selectors verified unique against Sidebar.js:
      - 9English link : only element with this href
-     - 9Remote button: only <button> in <aside> with a direct
-                       span.ml-auto child (the NEW badge)
-     - NEW badges    : only 3 spans carrying bg-green-500/15
+     - 9Remote link  : only <a> in <aside> with this href. Was a
+                       <button> up to v0.5.95 with a direct span.ml-auto
+                       child (the NEW badge); upstream turned it into an
+                       external link in v0.5.99, so the old button:has()
+                       selector matched nothing and the promo came back.
+     - NEW badges    : spans carrying bg-green-500/15 (upstream removed
+                       its own NEW badges; kept as a defensive no-op)
    ============================================================ */
 
 /* 9English external link */
@@ -622,12 +626,14 @@ aside a[href="https://9english.net/"] {
   display: none !important;
 }
 
-/* 9Remote promo button */
-aside button:has(> span.ml-auto) {
+/* 9Remote external link (upstream changed this from <button> to <a> in v0.5.99) */
+aside a[href="https://9remote.cc"] {
   display: none !important;
 }
 
-/* NEW badges (Media Providers parent, Media Providers child, 9Remote) */
+/* Defensive no-op: upstream no longer renders NEW badges (the 9Remote entry
+   now carries an orange HOT badge, hidden together with the link above).
+   Kept so a future NEW badge does not silently appear. */
 aside span[class*="bg-green-500/15"] {
   display: none !important;
 }
