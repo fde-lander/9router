@@ -30,7 +30,15 @@ function fetchLatestVersion() {
   });
 }
 
-function compareVersions(a, b) {
+// Extract base upstream version from FDE tag version (e.g. "fde-v0.5.91.1" → "0.5.91")
+export function extractBaseVersion(fdeVersion) {
+  const stripped = fdeVersion.replace(/^fde-v/, '');
+  const parts = stripped.split('.');
+  parts.pop();
+  return parts.join('.');
+}
+
+export function compareVersions(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
   for (let i = 0; i < 3; i++) {
@@ -55,7 +63,8 @@ async function getLatestVersionCached() {
 export async function GET() {
   const latestVersion = await getLatestVersionCached();
   const currentVersion = pkg.version;
-  const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
+  const baseVersion = extractBaseVersion(currentVersion);
+  const hasUpdate = latestVersion ? compareVersions(latestVersion, baseVersion) > 0 : false;
 
   return Response.json({ currentVersion, latestVersion, hasUpdate });
 }
